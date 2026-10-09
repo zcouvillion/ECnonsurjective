@@ -1,2 +1,2 @@
 # ECnonsurjective
-An algorithm which complements the author's preprint "Computing the nonsurjective primes for elliptic curves over number fields," in preparation.
+A prototype algorithm which complements the author's preprint "Computing the nonsurjective primes for elliptic curves over number fields," in preparation. Development and documentation in progress.
