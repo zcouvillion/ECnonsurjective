@@ -2,79 +2,11 @@
 _<t>:=PolynomialRing(Rationals());
 Qbar:=AlgebraicClosure(Rationals());
 
-/*
-Input: a number field K
-Output: the set \mathcal{X} and integer C_K from Section 4.2 of "COMPUTING THE NONSURJECTIVE PRIMES FOR ELLIPTIC CURVES OVER NUMBER FIELDS" 
-*/
 
-AlgCharacters := function(K)
-
-    rr:=Roots(DefiningPolynomial(K), Qbar);
-    embeddings := [*hom<K -> Qbar | r[1]>: r in rr *];
-
-    d:= Degree(K);
-    K_units,units_map:=UnitGroup(K);
-
-    L:=CartesianProduct([{0,1} : i in [1..d]]);
-    chars:=[b : b in L];
-    
-    alglist:=[[0]];
-    alg_count:=0;
-    M:=1;
-    
-    for char in chars do
-
-        char12:= [12*b: b in char];
-        M_char12:=AbsoluteCharacterBound(K,K_units,units_map, embeddings, char12);
-        
-        if M_char12 eq 0 then
-            alg_count:=alg_count+1;
-            alglist[alg_count]:=[a: a in char];
-            //print char;
-        else
-            M:=M*M_char12;
-            //print M_char12;
-        end if;
-        
-    end for;
-    
-    return alglist, M;
-
-end function;
 
 /*
-    Input: prime ideal p, Frobenius polynomial at p, class number of K, embeddings of K into Qbar, a list of exponents
-    Output: an integer supported at primes ell where the mod ell representation could be reducible and have a character with given exponents
-*/
-
-TestCharacter := function(p,frob,h_K,embeddings, Cn_sign )
-    
-    truth, gen:= IsPrincipal(p^h_K);
-    
-    charVal:=Qbar!1;
-    for i in [1..#Cn_sign] do
-        charVal := charVal * (Qbar!embeddings[i](gen)^Cn_sign[i]);
-    end for;
-    
-    
-    
-   
-        rts:=Roots(frob,Qbar);
-        j:=#rts;
-    
-        r1:=rts[1][1];
-        r2:=rts[j][1];
-    
-        val:= ( r1^(12*h_K) - charVal^12)*( r2^(12*h_K) - charVal^12);
-        
-    //print Norm(val);
-    return Integers()!Norm(val);
-
-end function;
-
-/*
-    Input: Elliptic curve, integer bound, maximal order of K
-    Output: a set of primes of characteristic up to B where the given model of E has good reduction
+    Input: Elliptic curve E, integer bound B, maximal order O_K
+    Output: a list of primes of characteristic up to B where the given model of E has good reduction
 */
 
 AuxiliaryPrimes := function(E,B,O_K)
@@ -111,8 +43,8 @@ end function;
 
 
 /*
-    Input: Elliptic curve, a prime ideal, optional: maximal order of K
-    Output: The Frobenius polynomial for the elliptic curve at the given prime ideal
+    Input: an elliptic curve E, a prime ideal p, optional: maximal order max_ord
+    Output: The Frobenius polynomial for the elliptic curve at the given prime ideal, the trace of Frobenius
 */
 
 FrobPoly:=function(E,p:max_ord:=-1)
@@ -146,8 +78,8 @@ FrobPoly:=function(E,p:max_ord:=-1)
 end function;
 
 /* 
-    Input: Elliptic curve, auxiliary primes, optional: maximal order of K
-    Output: list of Frobenius polynomials and list of Frobenius traces for E at the given primes
+    Input: Elliptic curve E, auxiliary list of primes aux_primes, optional: maximal order max_o
+    Output: list of Frobenius polynomials, list of Frobenius traces for E at the given primes
 */
 
 
@@ -163,164 +95,179 @@ ComputeFrobs := function(E,aux_primes:max_o:=-1)
 
 end function;
 
-/*
-    Input: list of prime ideals, list of Frobenius polynomials, field K, class number of K
-    Output: list of integers, one for each possible character describing a hypothetical one-dimensional subrepresentation. Primes dividing these integers are candidates for the mod ell representations being reducible.
-*/
-
-ReducibleTest := function(primes,frobs, K, h_K: stat:=false,algebraic_chars:=[], unbal:=-1, embeds :=[* *],prime_dat:=[* *])
-    embeddings:=embeds;
-
-    if #embeds eq 0 then
-        rr:=Roots(DefiningPolynomial(K), Qbar);
-        embeddings := [*hom<K -> Qbar | r[1]>: r in rr *];
-    end if;
-    
-    d:= Degree(K);
-
-
-    sigs:=[];
-    
-    if unbal eq -1 then
-        L:=CartesianProduct([{0,1} : i in [1..d]]);
-        sigs:=[b : b in L];
-    else
-        sigs:=algebraic_chars;
-    end if;
-
-    sigvals := [];
-    
-    for index in [1..#sigs] do
-    
-        signature:=sigs[index];
-        
-        vals:=[];
-        
-        for p_0 in [1..#primes] do
-            p:=primes[p_0];
-            frob:=frobs[p_0];
-            
-          vals[p_0]:=p_0*TestCharacter(p,frob,h_K,embeddings, signature);
-          
-        end for;
-        
-        sigvals[index]:=Gcd(vals);
-        
-        if stat eq true then
-              print "Character: ", signature, " checked.";
-              print sigvals[index];
-        end if;
-        
-        
-    
-    end for;
-
-
-    return sigvals;
-end function;
 
 /*
-    Input: Elliptic curve, maximal order of K
-    Output: A modulus describing the ramification of a quadratic character for a normalizer of a Cartan image
+Input: Elliptic curve E
+Output: set of primes where E has additive reduction, set of primes where E has bad reduction
 */
 
-ComputeFiniteConductor := function(E,O_K);
+AdditivePrimes := function(E)
 
-    K:=BaseRing(E);
+    N:=Conductor(E);
+    fact:=Factorization(N);
     
-    D:=Discriminant(E);
+    p_set := {};
+    bad_set := {};
     
-    C:=ideal<O_K|1>;
-    
-    I:=ideal<O_K|D>;
-    
-    fact:=Factorization(I);
     for f in fact do
-        
-         s:=KodairaSymbol(E,f[1]);
-         //print Norm(f[1]), s;
-         if s ne KodairaSymbol("I0") and s ne KodairaSymbol("In") then
-             I_p:=f[1];
-             if Norm(I_p) mod 2 eq 0 then
-                 I_p := I_p * I_p;
-             end if;
-             
-             C:=C* I_p;
-         end if;
+        bad_set := bad_set join {PrimeDivisors(Integers()!Norm(f[1]))[1]};
+        if f[2] gt 1 then
+            p_set := p_set join {f[1]};
+        end if;
     end for;
-        
-    return C;
+    
+    if #p_set eq 0 then
+        if #fact ne 0 then
+            p_set := {fact[1][1]};
+            p_set := p_set diff p_set;
+        else
+            O_K:=MaximalOrder(BaseRing(E));
+            p_set := {Factorization(ideal<O_K|2>)[1][1]};
+            p_set := p_set diff p_set;
+        end if;
+    end if;
+    
+    return p_set, bad_set;
 
 end function;
 
 /*
-    Input: primes, Frobenius traces, number of real places of K, output of ComputeFiniteConductor
-    Output: Integer divisible by all primes ell where the mod ell representation may be in a normalizer of a Cartan but not in the Cartan
+Input: a list of prime ideals, a list of Frobenius traces, a list of the additive primes of E, maximal order O_K
+Output: a set of primes containing all primes ell where the mod ell representation is geometrically imprimitive, not counting the places where E has bad reduction or are ramified in K, or 2, 3, or 5
 */
 
-NormalizerCartan := function(primes, traces, r , fin_conductor: v:=false)
-
-    T:=[ i : i in [1..r] ];
+ImprimitivePrimes := function(primes, traces, additive_primes, O_K)
     
-    G,map:=RayClassGroup(fin_conductor,T);
+    G,m:= pSelmerGroup(2,additive_primes);
     
-    if v eq true then
-        print G;
-    end if;
+    //print #G;
     
-    H:=sub<G|Id(G)>;
+    gens := Generators(G);
+    gen_list:= [Inverse(m)(g) : g in gens];
     
-    //print fin_conductor, G;
-
-    M:=1;
+    d:=#gen_list;
+    
+    V:=VectorSpace(GF(2), d);
+    basis := [];
+    W:= sub<V|basis>;
+    
+    trace_list:=[];
+    trace_count:=0;
     
     for i in [1..#primes] do
     
-        if H eq G then
-            return M;
+        if PrimeDivisors(Integers()!Norm(primes[i]))[1] eq 2 then
+            continue;
         end if;
-    
-       // print traces[i];
-    
+        
+        //print Norm(primes[i]), traces[i];
+        
         if traces[i] eq 0 then
             continue;
         end if;
     
-        p := primes[i];
-        g:=p @@ map;
+        vec := [];
+        next_one := false;
+        for j in [1..#gen_list] do
         
-        if g in H or traces[i] eq 0 then
+            l := LegendreSymbol(O_K!gen_list[j], primes[i]);
+
+            if l eq 0 then
+                next_one := true;
+                break;
+            end if;
+
+            if l eq 1 then
+                vec[j] := 0;
+            else
+                vec[j] := 1;
+            end if;
+        
+        end for;
+        
+        if next_one eq true then
             continue;
         end if;
         
-        p_char:=PrimeDivisors(Integers()!Norm(p))[1];
-        M:=traces[i] * M * p_char;
-       
-        H:=sub<G|H,g>;
+        v := V ! vec;
         
+        if v notin W then
+        
+            W:=sub<V | W,v>;
+            trace_count:=trace_count + 1;
+            trace_list[trace_count]:=traces[i];
+            
+            if W eq V then
+                break;
+            end if;
+        
+        end if;
         
     end for;
-
-return 0;
-
+    
+    if W ne V then
+        return {0};
+    end if;
+    
+    sus_primes := {};
+    for tr in trace_list do
+        sus_primes := sus_primes join {ell: ell in PrimeDivisors(tr)};
+    end for;
+    
+    return sus_primes;
+    
 end function;
+
+/*
+Input: Elliptic curve E, an integer bound B, Optional: the set additive_prime_set of places where E has additive reduction, the set bad_prime_set of places where E has bad reduction, a list prime_list of prime ideals and a list trace_list of Frobenius traces to use
+Output: the set of primes ell where E may be geometrically imprimitive ({0} if failure), the set of bad primes of E
+*/
+
+ComputeImprimitivePrimes:=function(E,B:additive_prime_set:={},bad_primes_set:={}, prime_list := [], trace_list :=[])
+     K:=BaseRing(E);
+   
+     O_K := MaximalOrder(K);
+  
+    
+    primes:=prime_list;
+    traces := trace_list;
+    
+    if #trace_list eq 0 then
+        primes:=AuxiliaryPrimes(E,B,O_K);
+        frobs, traces:=ComputeFrobs(E,primes : max_o:=O_K);
+    end if;
+    additive_primes:=additive_prime_set;
+    bad_set:=bad_primes_set;
+    
+    if #bad_primes_set eq 0 or #additive_prime_set eq 0 then
+        additive_primes, bad_set := AdditivePrimes(E);
+    end if;
+    //print additive_primes;
+    
+     D:=Integers()!Numerator(Discriminant(K));
+    bad_set := bad_set join {p: p in PrimeDivisors(D)};
+    bad_set := bad_set join {2,3, 5};
+    
+    return ImprimitivePrimes(primes,traces,additive_primes,O_K), bad_set;
+    
+end function;
+
 
 
 /*
 
     Input: Elliptic curve E, an integer bound B
-    Optional: embeddings of K into Qbar (embeddings), maximal order of K (max_ord), some auxiliary data computed in ReduciblePrimes meant for recycling information (prime_data), optional extra text (verb)
-    Output: Success flag, set of primes containing those where rho_{E,ell} is geometrically reducible, set of aformentioned primes not necessarily including the primes of bad reduction or primes where K is ramified, embeddings of K into Qbar, auxiliary prime data meant to be recycled, maximal order of K.
+    Optional: embeddings of K into Qbar (embeddings), maximal order of K (max_order), some auxiliary data computed in ReduciblePrimes meant for recycling information (prime_data), optional extra printed text (verb), the set of primes where E has bad reduction (bad_primes), a list prime_list of primes and a list frob_list of Frobenius polynomials to use instead of computing Frobenius polynomials up to the bound B
+    Output: an integer success flag, set of primes containing those where rho_{E,ell} is geometrically reducible ({0} if failed), subset of aformentioned primes not necessarily including the primes of bad reduction or primes where K is ramified, embeddings of K into Qbar, auxiliary prime data meant to be recycled, maximal order of K meant to be recycled.
     
 */
 
-ReduciblePrimes := function(E, B: embeddings:=[* *],max_order:=-1,prime_data:=[* *], verb:=false);
+ReduciblePrimes := function(E, B: embeddings:=[* *],max_order:=-1,prime_data:=[* *], v:=false, bad_primes:={}, prime_list :=[], frob_list :=[]);
 
    
     K:=BaseRing(E);
      d:=Degree(K);
     
-    E:=IntegralModel(E);
        
     O_K := max_order;
     if Type(O_K) eq RngIntElt then
@@ -343,29 +290,32 @@ ReduciblePrimes := function(E, B: embeddings:=[* *],max_order:=-1,prime_data:=[*
         new_embeddings := [*hom<K -> Qbar | r[1]>: r in rr *];
     end if;
     
-    primes:=AuxiliaryPrimes(E,B,O_K);
-    frobs, traces:=ComputeFrobs(E,primes : max_o:=O_K);
+    bad_set:=bad_primes;
+    
+    if #bad_primes eq 0 then
+    
+        additive_primes, bad_set := AdditivePrimes(E);
+    end if;
+    
+    primes:=prime_list;
+    frobs:=frob_list;
+    
+    if #frobs eq 0 then  
+        primes:=AuxiliaryPrimes(E,B,O_K);
+        frobs, traces:=ComputeFrobs(E,primes : max_o:=O_K);
+    end if;
      
     susdivisor := 2 * 3 * 5;
     
-    D:=Integers()! Norm(Discriminant(E))* Integers()!Numerator(Discriminant(K));
-   
-    
-    for p in PrimeDivisors(D) do
-        susdivisor := susdivisor * p;
+    susdivisor:= susdivisor*(Integers()!Numerator(Discriminant(K)));
+    for p in bad_set do
+        susdivisor:=susdivisor*p;
     end for;
- 
     
-    alg :=[[0]];
-    unbalanced:=-1;
-    
-    
+
     
     L:=CartesianProduct([{0,1} : i in [1..d]]);
     sigs:=[b : b in L];
-   
-   
-   
    
     sig_vals := [];
     
@@ -474,94 +424,83 @@ ReduciblePrimes := function(E, B: embeddings:=[* *],max_order:=-1,prime_data:=[*
     end for;
    
    char_div:=1;
-   for char in sig_vals do
+   for i in [1..#sig_vals] do
+        char := sig_vals[i];
         susdivisor:=susdivisor * char;
         char_div:=char_div*char;
-        if verb eq true then
-            print char;
+        if v eq true then
+            print "Character with key",i,"has value",char;
         end if;
    end for;
    
    if susdivisor eq 0 then
-       return 0, -1,-1, new_embeddings, prime_data_new, O_K;
+       return 1, {0},-1, new_embeddings, prime_data_new, O_K;
    end if;
    
     susprimes:=PrimeDivisors(susdivisor);
     charprimes:=PrimeDivisors(char_div);
-   
-   
-   
-
     
+    sus_set := {p : p in susprimes};
+    char_set := {p : p in charprimes};
+    
+    D:=Integers()!Numerator(Discriminant(K));
+    sus_set:=sus_set join {p: p in PrimeDivisors(D)};
    
-    return 0, susprimes, charprimes, new_embeddings, prime_data_new, O_K;
+    return 0, sus_set, char_set, new_embeddings, prime_data_new, O_K;
 
     
 
 end function;
 
 /*
-    Input: Elliptic curve E, bound B
-    Output: success flag, finite list of primes containing all nonsurjective primes (if successful), or -1, [] if unsuccessful
+    Input: Elliptic curve E, bound B, Optional: set verb := true for additional printed information
+    Output: integer success flag, finite list of primes containing all nonsurjective primes. If unsuccessful, try increasing B.
 */
 
-NonsurjectivePrimes := function(E, B: verb:=false, alg_chars:=false)
+NonsurjectivePrimes := function(E, B: verb:=false)
 
     K:=BaseRing(E);
     
     E:=IntegralModel(E);
     
-    r,s:=Signature(K);
-    h_K:=ClassNumber(K);
     O_K:=MaximalOrder(K);
     primes:=AuxiliaryPrimes(E,B,O_K);
     frobs, traces:=ComputeFrobs(E,primes);
      
-    susdivisor := 2 * 3 * 5;
+    sus_set :=  {2,3,5};
     
-    D:=Integers()! Norm(Discriminant(E))* Integers()!Numerator(Discriminant(K));
-   
-   
-    for p in PrimeDivisors(D) do
-         susdivisor := susdivisor * p;
-    end for;
-   
+    additive_primes, bad_prime_set :=AdditivePrimes(E);
     
-    alg :=[[0]];
-    unbalanced:=-1;
+   flag, sus_reducible, sus_without_bad_primes, embs, p_data, O_K := ReduciblePrimes(E,100: v:=verb, bad_primes := bad_prime_set, frob_list := frobs, prime_list := primes);
     
-    if alg_chars eq true then
-        alg,unbalanced := AlgCharacters(K);
-        susdivisors := susdivisor*unbalanced;
-    end if;
     
-    CharList:=ReducibleTest(primes,frobs,K,h_K:stat:=verb, algebraic_chars:=alg, unbal:=unbalanced);
+    sus_set := sus_set join sus_reducible;
+    
+    if flag eq 1 then
+        print "Unable to rule out the reducible case.";
+        return 1, _, embs,p_data,O_K;
+    end if;    
+    
+    sus_im,bad := ComputeImprimitivePrimes(E,200:additive_prime_set := additive_primes,bad_primes_set:=bad_prime_set, prime_list := primes, trace_list := traces);
     
     if verb eq true then
-        print "Characters checked.";
+        print "Reducible case ruled out for primes not in", (sus_set join bad);
     end if;
     
-    for char in CharList do
-        susdivisor:=susdivisor * char;
-    end for;
+    if sus_im eq {0} then
+        print "Unable to rule out the imprimitive case.";
+        return 1, _, embs, p_data,O_K;
+    end if;
     
-    normalizer:=NormalizerCartan(primes, traces, r,ComputeFiniteConductor(E,O_K): v:=verb);
+    sus_set := sus_set join sus_im;
     
     if verb eq true then
-        print "Normalizer considered.";
-        print normalizer;
+        print "Imprimitive case ruled out for primes not in", (sus_im join bad);
     end if;
-    
-    
-    susdivisor := normalizer * susdivisor;
-    if susdivisor eq 0 then
-        print "Error: could not rule out any primes.";
-        return -1,[];
-    end if;
-    
-    susprimes:=PrimeDivisors(susdivisor);
 
-    return 0, susprimes;
+    sus_set := sus_set join bad;
+    
+    return 0, sus_set;
 
 end function;
 
